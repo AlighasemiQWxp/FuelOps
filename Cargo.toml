@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = ["CoreModule", "BasePhasedController", "AuthModule", "PermissionModule", "StationModule", "EmployeeModule", "ShiftModule", "ReconciliationModule", "InventoryModule", "DeliveryModule", "AlertModule", "DashboardModule", "AuditModule", "server"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license-file = "LICENSE"
+
+[workspace.dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+mongodb = "3.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+chrono-tz = "0.10"
+uuid = { version = "1", features = ["v4", "serde"] }
+async-trait = "0.1"
+futures-util = "0.3"
+thiserror = "2"
+argon2 = "0.5"
+jsonwebtoken = "9"
+sha2 = "0.10"
+rand = "0.8"
+tower-http = { version = "0.6", features = ["cors", "limit", "set-header"] }
+dotenvy = "0.15"
+
+fuel-core = { path = "CoreModule" }
+fuel-phases = { path = "BasePhasedController" }
+fuel-auth = { path = "AuthModule" }
+fuel-permission = { path = "PermissionModule" }
+fuel-station = { path = "StationModule" }
+fuel-employee = { path = "EmployeeModule" }
+fuel-shift = { path = "ShiftModule" }
+fuel-reconciliation = { path = "ReconciliationModule" }
+fuel-inventory = { path = "InventoryModule" }
+fuel-delivery = { path = "DeliveryModule" }
+fuel-alert = { path = "AlertModule" }
+fuel-dashboard = { path = "DashboardModule" }
+fuel-audit = { path = "AuditModule" }

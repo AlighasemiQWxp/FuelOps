@@ -1,0 +1,21 @@
+[package]
+name = "fuel-employee"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+mongodb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+async-trait.workspace = true
+futures-util.workspace = true
+thiserror.workspace = true
+fuel-core.workspace = true
+fuel-phases.workspace = true
+argon2.workspace = true
+rand.workspace = true
+fuel-permission.workspace = true

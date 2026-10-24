@@ -1,0 +1,35 @@
+[package]
+name = "fuel-ops"
+version.workspace = true
+edition.workspace = true
+default-run = "fuel-ops"
+
+[dependencies]
+fuel-core.workspace = true
+fuel-phases.workspace = true
+fuel-auth.workspace = true
+fuel-permission.workspace = true
+fuel-station.workspace = true
+fuel-employee.workspace = true
+fuel-shift.workspace = true
+fuel-reconciliation.workspace = true
+fuel-inventory.workspace = true
+fuel-delivery.workspace = true
+fuel-alert.workspace = true
+fuel-dashboard.workspace = true
+fuel-audit.workspace = true
+axum.workspace = true
+tokio.workspace = true
+mongodb.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+argon2.workspace = true
+rand.workspace = true
+tower-http.workspace = true
+dotenvy.workspace = true
+futures-util.workspace = true
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }

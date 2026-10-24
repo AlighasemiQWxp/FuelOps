@@ -1,0 +1,4440 @@
+openapi: 3.1.0
+info:
+  title: Fuel Ops API
+  version: 1.0.0
+  description:
+    Versioned REST contract for Fuel Ops. JWT bearer authentication, live station-scoped permissions,
+    integer IRR and milliliters, UTC epoch milliseconds. Future Flutter clients can use the same API.
+    All demo records are fictional.
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local API
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Permissions
+  - name: Employees
+  - name: Stations
+  - name: Shifts
+  - name: Reconciliation
+  - name: Deliveries
+  - name: Inventory
+  - name: Alerts
+  - name: Dashboard
+  - name: Audit
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Log in and create a revocable session
+      operationId: post_auth_login
+      description:
+        Sets the fuel_refresh HttpOnly SameSite=Strict cookie. The access token expires in
+        ten minutes.
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Must exactly match WEB_ORIGIN.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Login"
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Rotate refresh token
+      operationId: post_auth_refresh
+      description:
+        Requires fuel_refresh cookie. Replay of a consumed refresh token revokes the session
+        family. Browser clients should serialize refresh calls across tabs.
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Must exactly match WEB_ORIGIN.
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - refreshCookie: []
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Revoke the session and clear the refresh cookie
+      operationId: post_auth_logout
+      description: ""
+      parameters:
+        - name: Origin
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Must exactly match WEB_ORIGIN.
+      responses:
+        "204":
+          description: Success
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      security:
+        - refreshCookie: []
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Read current actor and live permissions
+      operationId: get_auth_me
+      description: ""
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Actor"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /permissions:
+    get:
+      tags:
+        - Permissions
+      summary: Read the permission catalog
+      operationId: get_permissions
+      description: "
+
+        Required permissions: permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+                required:
+                  - permissions
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /roles:
+    get:
+      tags:
+        - Permissions
+      summary: List roles
+      operationId: get_roles
+      description: "
+
+        Required permissions: permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RolePage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Permissions
+      summary: Create roles record
+      operationId: post_roles
+      description: "
+
+        Required permissions: permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Role"
+  /employees:
+    get:
+      tags:
+        - Employees
+      summary: List employees
+      operationId: get_employees
+      description: "
+
+        Required permissions: employee.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeePage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Employees
+      summary: Create employees record
+      operationId: post_employees
+      description: "
+
+        Required permissions: employee.create and permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+  /stations:
+    get:
+      tags:
+        - Stations
+      summary: List stations
+      operationId: get_stations
+      description: "
+
+        Required permissions: station.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Stations
+      summary: Create stations record
+      operationId: post_stations
+      description: "
+
+        Required permissions: station.manage and permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Station"
+  /shifts:
+    get:
+      tags:
+        - Shifts
+      summary: List shifts
+      operationId: get_shifts
+      description: "
+
+        Required permissions: shift.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Shifts
+      summary: Create shifts record
+      operationId: post_shifts
+      description: "
+
+        Required permissions: shift.create"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftCreate"
+  /reconciliations:
+    get:
+      tags:
+        - Reconciliation
+      summary: List reconciliations
+      operationId: get_reconciliations
+      description: "
+
+        Required permissions: reconciliation.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconciliationPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Reconciliation
+      summary: Create reconciliations record
+      operationId: post_reconciliations
+      description: "
+
+        Required permissions: reconciliation.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconciliationRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconciliationCreate"
+  /deliveries:
+    get:
+      tags:
+        - Deliveries
+      summary: List deliveries
+      operationId: get_deliveries
+      description: "
+
+        Required permissions: delivery.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Deliveries
+      summary: Create deliveries record
+      operationId: post_deliveries
+      description: "
+
+        Required permissions: delivery.create"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryCreate"
+  /inventory:
+    get:
+      tags:
+        - Inventory
+      summary: List inventory
+      operationId: get_inventory
+      description: "
+
+        Required permissions: inventory.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalancePage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Inventory
+      summary: Create inventory record
+      operationId: post_inventory
+      description: "
+
+        Required permissions: inventory.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MeasurementCreate"
+  /alerts:
+    get:
+      tags:
+        - Alerts
+      summary: List alerts
+      operationId: get_alerts
+      description: "
+
+        Required permissions: alert.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Alerts
+      summary: Create alerts record
+      operationId: post_alerts
+      description: "
+
+        Required permissions: alert.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertCreate"
+  /roles/{id}:
+    put:
+      tags:
+        - Permissions
+      summary: Update a role with optimistic concurrency
+      operationId: put_roles_id
+      description:
+        "Cannot edit a role assigned to the acting administrator or grant permissions the actor
+        lacks.
+
+        Required permissions: permission.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleUpdate"
+  /employees/{id}:
+    put:
+      tags:
+        - Employees
+      summary: Update or deactivate an employee account
+      operationId: put_employees_id
+      description:
+        "Revokes all employee sessions. Self-editing of access is prohibited. Edits must originate
+        from the account home station.
+
+        Required permissions: employee.update and permission.manage; employee.delete when deactivating"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmployeeRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmployeeInput"
+  /stations/{id}:
+    put:
+      tags:
+        - Stations
+      summary: Update station equipment and rules
+      operationId: put_stations_id
+      description:
+        "Rejects changes while shifts are Open or PendingReview. Existing tank and nozzle identifiers
+        are retained. Historical shift price snapshots remain unchanged.
+
+        Required permissions: station.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StationRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StationUpdate"
+  /shifts/{id}/transition:
+    post:
+      tags:
+        - Shifts
+      summary: Transition shifts
+      operationId: post_shifts_id_transition
+      description:
+        "Scheduled → Open → PendingReview. Reconciliation approval sets Approved. Approved
+        → Closed requires a handover note. Final initial readings must match recorded opening readings.
+        Completed shifts cannot be edited.
+
+        Required permissions: shift.open, shift.close, shift.create, or shift.approve depending on transition"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShiftRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShiftTransition"
+  /reconciliations/{id}/transition:
+    post:
+      tags:
+        - Reconciliation
+      summary: Transition reconciliations
+      operationId: post_reconciliations_id_transition
+      description:
+        "CollectingReadings → Calculating → ReviewingDiscrepancies → Approval → Completed.
+        Approval may return to ReviewingDiscrepancies. Completion commits inventory, reconciliation, and
+        shift approval together.
+
+        Required permissions: reconciliation.manage; completion additionally needs reconciliation.approve
+        and shift.approve"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReconciliationRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReconciliationTransition"
+  /deliveries/{id}/transition:
+    post:
+      tags:
+        - Deliveries
+      summary: Transition deliveries
+      operationId: post_deliveries_id_transition
+      description:
+        "Registered → AwaitingMeasurements → Measuring → Reviewing → Approved → Completed.
+        Reviewing may return to Measuring. Measurements are direct volumes; completion updates inventory
+        atomically.
+
+        Required permissions: delivery.create; approval/completion require delivery.approve"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeliveryTransition"
+  /alerts/{id}/transition:
+    post:
+      tags:
+        - Alerts
+      summary: Transition alerts
+      operationId: post_alerts_id_transition
+      description:
+        "Open → Acknowledged → Resolved → Open. Resolving requires a nonempty note.
+
+        Required permissions: alert.manage"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertTransition"
+  /inventory/movements:
+    get:
+      tags:
+        - Inventory
+      summary: Read immutable inventory movements
+      operationId: get_inventory_movements
+      description: "
+
+        Required permissions: inventory.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /reconciliations/{id}/corrections:
+    get:
+      tags:
+        - Reconciliation
+      summary: Read correction entries
+      operationId: get_reconciliations_id_corrections
+      description: "
+
+        Required permissions: reconciliation.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CorrectionRecord"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      tags:
+        - Reconciliation
+      summary: Append a finalized-record correction
+      operationId: post_reconciliations_id_corrections
+      description: "
+
+        Required permissions: reconciliation.approve; inventory.manage for volume corrections"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  version:
+                    type: integer
+                    format: int64
+                    minimum: 1
+                required:
+                  - id
+                  - version
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CorrectionCreate"
+  /dashboard:
+    get:
+      tags:
+        - Dashboard
+      summary: Aggregate station operations
+      operationId: get_dashboard
+      description:
+        "Current inventory/open-work metrics are snapshots. Other metrics use [from,to). Custom
+        ranges are capped at 366 days. Persian month/year ranges and Tehran reporting timezone are used;
+        MongoDB time buckets use its calendar semantics.
+
+        Required permissions: dashboard.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: integer
+            format: int64
+            description: UTC Unix epoch milliseconds.
+        - name: to
+          in: query
+          schema:
+            type: integer
+            format: int64
+            description: UTC Unix epoch milliseconds.
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum:
+              - today
+              - yesterday
+              - 7d
+              - week
+              - 30d
+              - month
+              - previous_month
+              - year
+            default: 7d
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+              - month
+              - year
+            default: day
+        - name: station
+          in: query
+          schema:
+            type: string
+            description: Assigned station ID or all. Every selected station is reauthorized.
+        - name: tank
+          in: query
+          schema:
+            type: string
+        - name: pump
+          in: query
+          schema:
+            type: string
+        - name: nozzle
+          in: query
+          schema:
+            type: string
+        - name: fuel_type
+          in: query
+          schema:
+            type: string
+        - name: shift
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: compare
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /dashboard/export:
+    get:
+      tags:
+        - Dashboard
+      summary: Export the filtered movement series as CSV
+      operationId: get_dashboard_export
+      description: "
+
+        Required permissions: dashboard.view and report.export"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: integer
+            format: int64
+            description: UTC Unix epoch milliseconds.
+        - name: to
+          in: query
+          schema:
+            type: integer
+            format: int64
+            description: UTC Unix epoch milliseconds.
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum:
+              - today
+              - yesterday
+              - 7d
+              - week
+              - 30d
+              - month
+              - previous_month
+              - year
+            default: 7d
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+              - month
+              - year
+            default: day
+        - name: station
+          in: query
+          schema:
+            type: string
+            description: Assigned station ID or all. Every selected station is reauthorized.
+        - name: tank
+          in: query
+          schema:
+            type: string
+        - name: pump
+          in: query
+          schema:
+            type: string
+        - name: nozzle
+          in: query
+          schema:
+            type: string
+        - name: fuel_type
+          in: query
+          schema:
+            type: string
+        - name: shift
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: compare
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Success
+          content:
+            text/csv:
+              schema:
+                type: string
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /audit:
+    get:
+      tags:
+        - Audit
+      summary: Read audit history
+      operationId: get_audit
+      description: "
+
+        Required permissions: audit.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 10000
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            maximum: 100
+            default: 30
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /audit/history/{collection}/{id}:
+    get:
+      tags:
+        - Audit
+      summary: Read prior scoped record snapshots
+      operationId: get_audit_history_collection_id
+      description:
+        "Returns up to 100 prior versions, newest first. Password hashes are omitted.
+
+        Required permissions: audit.view"
+      parameters:
+        - name: X-Station-Id
+          in: header
+          description: Assigned station to select. Defaults to the first station in the active account.
+          schema:
+            type: string
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: collection
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/History"
+        "401":
+          description: Missing, expired, revoked, or invalid authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: Permission or station boundary denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Version conflict, duplicate record, or concurrent transaction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Invalid fields or workflow transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: Authentication rate limit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description:
+            Database unavailable or ambiguous operation result; reload authoritative state
+            before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    refreshCookie:
+      type: apiKey
+      in: cookie
+      name: fuel_refresh
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    Actor:
+      type: object
+      properties:
+        user_id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        station_ids:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        name:
+          type: string
+      required:
+        - user_id
+        - org_id
+        - station_id
+        - station_ids
+        - permissions
+        - name
+    Session:
+      type: object
+      properties:
+        access_token:
+          type: string
+        actor:
+          $ref: "#/components/schemas/Actor"
+      required:
+        - access_token
+        - actor
+    Login:
+      type: object
+      properties:
+        organization:
+          type: string
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          maxLength: 1024
+      required:
+        - organization
+        - email
+        - password
+    Role:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        permissions:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - permissions
+    RoleUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        permissions:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+      required:
+        - name
+        - permissions
+        - version
+    Employee:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        active:
+          type: boolean
+        station_ids:
+          type: array
+          items:
+            type: string
+        role_ids:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - email
+        - active
+        - station_ids
+        - role_ids
+    EmployeeInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        active:
+          type: boolean
+        station_ids:
+          type: array
+          items:
+            type: string
+        role_ids:
+          type: array
+          items:
+            type: string
+        password:
+          anyOf:
+            - type: string
+              minLength: 12
+              maxLength: 128
+            - type: "null"
+        version:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 1
+            - type: "null"
+      required:
+        - name
+        - email
+        - active
+        - station_ids
+        - role_ids
+    FuelType:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        color:
+          type: string
+      required:
+        - id
+        - name
+        - color
+    PriceTier:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        irr_per_liter:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+      required:
+        - id
+        - name
+        - irr_per_liter
+    Tank:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        fuel_type_id:
+          type: string
+        capacity_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        low_threshold_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        calibration_reference:
+          anyOf:
+            - type: string
+            - type: "null"
+      required:
+        - id
+        - name
+        - fuel_type_id
+        - capacity_ml
+        - low_threshold_ml
+        - calibration_reference
+    Pump:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+    Nozzle:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        pump_id:
+          type: string
+        tank_id:
+          type: string
+        meter_modulus_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        active:
+          type: boolean
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceTier"
+      required:
+        - id
+        - name
+        - pump_id
+        - tank_id
+        - meter_modulus_ml
+        - active
+        - prices
+    Station:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        city:
+          type: string
+        timezone:
+          type: string
+          enum:
+            - Asia/Tehran
+        demo:
+          type: boolean
+        fuel_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/FuelType"
+        tanks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Tank"
+        pumps:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pump"
+        nozzles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Nozzle"
+        discrepancy_tolerance_irr:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+        delivery_tolerance_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+      required:
+        - name
+        - city
+        - timezone
+        - demo
+        - fuel_types
+        - tanks
+        - pumps
+        - nozzles
+        - discrepancy_tolerance_irr
+        - delivery_tolerance_ml
+    StationUpdate:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        data:
+          $ref: "#/components/schemas/Station"
+      required:
+        - version
+        - data
+    Reading:
+      type: object
+      properties:
+        nozzle_id:
+          type: string
+        initial_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        final_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        rollovers:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 1
+        tiers:
+          type: array
+          items:
+            type: object
+            properties:
+              tier_id:
+                type: string
+              volume_ml:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 9007199254740991
+                description: Integer milliliters. Display as liters by dividing by 1000.
+            required:
+              - tier_id
+              - volume_ml
+      required:
+        - nozzle_id
+        - initial_ml
+        - final_ml
+        - rollovers
+        - tiers
+    Settlement:
+      type: object
+      properties:
+        method:
+          type: string
+          enum:
+            - cash
+            - card
+            - credit
+        amount_irr:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+        reference:
+          type: string
+          maxLength: 200
+      required:
+        - method
+        - amount_irr
+        - reference
+    ShiftPhase:
+      type: string
+      enum:
+        - Scheduled
+        - Open
+        - PendingReview
+        - Approved
+        - Closed
+        - Cancelled
+    ShiftCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        starts_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        ends_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        employee_ids:
+          type: array
+          items:
+            type: string
+        nozzle_ids:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - starts_at
+        - ends_at
+        - employee_ids
+        - nozzle_ids
+    Shift:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        starts_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        ends_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        employee_ids:
+          type: array
+          items:
+            type: string
+        nozzle_ids:
+          type: array
+          items:
+            type: string
+        status:
+          $ref: "#/components/schemas/ShiftPhase"
+        equipment:
+          type: array
+          items:
+            $ref: "#/components/schemas/Nozzle"
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reading"
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+        reconciliation_approved:
+          type: boolean
+        handover_note:
+          type: string
+      required:
+        - name
+        - starts_at
+        - ends_at
+        - employee_ids
+        - nozzle_ids
+        - status
+        - equipment
+        - readings
+        - settlements
+        - reconciliation_approved
+        - handover_note
+    ShiftTransition:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        to:
+          $ref: "#/components/schemas/ShiftPhase"
+        readings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Reading"
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/Settlement"
+        handover_note:
+          type: string
+          maxLength: 2000
+      required:
+        - version
+        - to
+    ReconciliationPhase:
+      type: string
+      enum:
+        - CollectingReadings
+        - Calculating
+        - ReviewingDiscrepancies
+        - Approval
+        - Completed
+    Reconciliation:
+      type: object
+      properties:
+        shift_id:
+          type: string
+        shift_name:
+          type: string
+        status:
+          $ref: "#/components/schemas/ReconciliationPhase"
+        volume_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        expected_irr:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+        settled_irr:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+        difference_irr:
+          type: integer
+          format: int64
+        tolerance_irr:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer Iranian rials (IRR), never toman.
+        investigation:
+          type: string
+        shift_version:
+          type: integer
+          format: int64
+          minimum: 1
+        submitted_by:
+          type: string
+        approved_by:
+          anyOf:
+            - type: string
+            - type: "null"
+      required:
+        - shift_id
+        - shift_name
+        - status
+        - volume_ml
+        - expected_irr
+        - settled_irr
+        - difference_irr
+        - tolerance_irr
+        - investigation
+        - shift_version
+        - submitted_by
+        - approved_by
+    ReconciliationCreate:
+      type: object
+      properties:
+        shift_id:
+          type: string
+      required:
+        - shift_id
+    ReconciliationTransition:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        to:
+          $ref: "#/components/schemas/ReconciliationPhase"
+        investigation:
+          type: string
+          maxLength: 4000
+      required:
+        - version
+        - to
+    CorrectionCreate:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        delta_irr:
+          type: integer
+          format: int64
+          default: 0
+        inventory_delta_ml:
+          type: integer
+          format: int64
+          default: 0
+          description:
+            Signed recorded-inventory adjustment; requires inventory.manage and a tank from
+            the original shift.
+        tank_id:
+          anyOf:
+            - type: string
+            - type: "null"
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 4000
+      required:
+        - version
+        - reason
+    Correction:
+      type: object
+      properties:
+        reconciliation_id:
+          type: string
+        delta_irr:
+          type: integer
+          format: int64
+        inventory_delta_ml:
+          type: integer
+          format: int64
+        tank_id:
+          anyOf:
+            - type: string
+            - type: "null"
+        reason:
+          type: string
+        approved_by:
+          type: string
+      required:
+        - reconciliation_id
+        - delta_irr
+        - inventory_delta_ml
+        - tank_id
+        - reason
+        - approved_by
+    DeliveryPhase:
+      type: string
+      enum:
+        - Registered
+        - AwaitingMeasurements
+        - Measuring
+        - Reviewing
+        - Approved
+        - Completed
+        - Cancelled
+    DeliveryCreate:
+      type: object
+      properties:
+        document_number:
+          type: string
+          minLength: 1
+          maxLength: 100
+        supplier:
+          type: string
+          maxLength: 160
+        tank_id:
+          type: string
+        fuel_type_id:
+          type: string
+        declared_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+      required:
+        - document_number
+        - supplier
+        - tank_id
+        - fuel_type_id
+        - declared_ml
+        - source
+    Delivery:
+      type: object
+      properties:
+        document_number:
+          type: string
+          minLength: 1
+          maxLength: 100
+        supplier:
+          type: string
+          maxLength: 160
+        tank_id:
+          type: string
+        fuel_type_id:
+          type: string
+        declared_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+        before_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        after_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        measured_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        difference_ml:
+          anyOf:
+            - type: integer
+              format: int64
+            - type: "null"
+        tolerance_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        status:
+          $ref: "#/components/schemas/DeliveryPhase"
+        note:
+          type: string
+        approved_by:
+          anyOf:
+            - type: string
+            - type: "null"
+      required:
+        - document_number
+        - supplier
+        - tank_id
+        - fuel_type_id
+        - declared_ml
+        - source
+        - before_ml
+        - after_ml
+        - measured_ml
+        - difference_ml
+        - tolerance_ml
+        - status
+        - note
+        - approved_by
+    DeliveryTransition:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        to:
+          $ref: "#/components/schemas/DeliveryPhase"
+        before_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        after_ml:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 0
+              maximum: 9007199254740991
+              description: Integer milliliters. Display as liters by dividing by 1000.
+            - type: "null"
+        note:
+          type: string
+          maxLength: 4000
+      required:
+        - version
+        - to
+    Balance:
+      type: object
+      properties:
+        tank_id:
+          type: string
+        volume_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+            - calculated
+        measured_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+      required:
+        - tank_id
+        - volume_ml
+        - source
+        - measured_at
+    Movement:
+      type: object
+      properties:
+        tank_id:
+          type: string
+        quantity_ml:
+          type: integer
+          format: int64
+        kind:
+          type: string
+          enum:
+            - measurement
+            - delivery
+            - dispensing
+            - correction
+        reference:
+          type: string
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+            - calculated
+        measured_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        resulting_volume_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+      required:
+        - tank_id
+        - quantity_ml
+        - kind
+        - reference
+        - source
+        - measured_at
+        - resulting_volume_ml
+    MeasurementCreate:
+      type: object
+      properties:
+        tank_id:
+          type: string
+        volume_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+        measured_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        note:
+          type: string
+          minLength: 1
+        version:
+          anyOf:
+            - type: integer
+              format: int64
+              minimum: 1
+            - type: "null"
+      required:
+        - tank_id
+        - volume_ml
+        - source
+        - measured_at
+        - note
+    AlertCreate:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - nozzle
+            - reading
+            - inventory
+            - overdue_shift
+            - handover
+            - discrepancy
+            - delivery
+            - other
+        severity:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 4000
+        entity_id:
+          type: string
+        assigned_to:
+          anyOf:
+            - type: string
+            - type: "null"
+      required:
+        - kind
+        - severity
+        - title
+        - description
+        - entity_id
+    AlertHistory:
+      type: object
+      properties:
+        at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        actor:
+          type: string
+        status:
+          type: string
+        note:
+          type: string
+      required:
+        - at
+        - actor
+        - status
+        - note
+    Alert:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - nozzle
+            - reading
+            - inventory
+            - overdue_shift
+            - handover
+            - discrepancy
+            - delivery
+            - other
+        severity:
+          type: string
+          enum:
+            - low
+            - medium
+            - high
+        title:
+          type: string
+          minLength: 1
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 4000
+        entity_id:
+          type: string
+        assigned_to:
+          anyOf:
+            - type: string
+            - type: "null"
+        status:
+          type: string
+          enum:
+            - Open
+            - Acknowledged
+            - Resolved
+        resolution:
+          type: string
+        source:
+          type: string
+          enum:
+            - manual
+            - simulated
+            - calculated
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertHistory"
+      required:
+        - kind
+        - severity
+        - title
+        - description
+        - entity_id
+        - assigned_to
+        - status
+        - resolution
+        - source
+        - history
+    AlertTransition:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        to:
+          type: string
+          enum:
+            - Open
+            - Acknowledged
+            - Resolved
+        note:
+          type: string
+          maxLength: 4000
+        assigned_to:
+          anyOf:
+            - type: string
+            - type: "null"
+      required:
+        - version
+        - to
+        - note
+    Audit:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        actor_id:
+          type: string
+        actor_name:
+          type: string
+        entity_id:
+          type: string
+        collection:
+          type: string
+        action:
+          type: string
+        before_version:
+          type: integer
+          format: int64
+        after_version:
+          type: integer
+          format: int64
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+      required:
+        - id
+        - org_id
+        - station_id
+        - actor_id
+        - actor_name
+        - entity_id
+        - collection
+        - action
+        - before_version
+        - after_version
+        - created_at
+    History:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        collection:
+          type: string
+        entity_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        snapshot:
+          type: object
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+      required:
+        - id
+        - org_id
+        - station_id
+        - collection
+        - entity_id
+        - version
+        - snapshot
+        - created_at
+    Category:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: integer
+          format: int64
+      required:
+        - name
+        - value
+    SeriesPoint:
+      type: object
+      properties:
+        at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        dispensed_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        delivery_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        net_ml:
+          type: integer
+          format: int64
+      required:
+        - at
+        - dispensed_ml
+        - delivery_ml
+        - net_ml
+    Dashboard:
+      type: object
+      properties:
+        generated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        from:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        to:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        inventory_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        dispensed_ml:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 9007199254740991
+          description: Integer milliliters. Display as liters by dividing by 1000.
+        active_shifts:
+          type: integer
+          format: int64
+        completed_shifts:
+          type: integer
+          format: int64
+        pending_approvals:
+          type: integer
+          format: int64
+        open_discrepancies:
+          type: integer
+          format: int64
+        financial_difference_irr:
+          type: integer
+          format: int64
+        correction_irr:
+          type: integer
+          format: int64
+        incoming_deliveries:
+          type: integer
+          format: int64
+        open_alerts:
+          type: integer
+          format: int64
+        employee_count:
+          type: integer
+          format: int64
+        series:
+          type: array
+          items:
+            $ref: "#/components/schemas/SeriesPoint"
+        inventory_history:
+          type: array
+          items:
+            type: object
+            properties:
+              at:
+                type: integer
+                format: int64
+                description: UTC Unix epoch milliseconds.
+              volume_ml:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 9007199254740991
+                description: Integer milliliters. Display as liters by dividing by 1000.
+            required:
+              - at
+              - volume_ml
+        fuel_distribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        shift_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        issue_categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        discrepancy_status:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        stations:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              dispensed_ml:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 9007199254740991
+                description: Integer milliliters. Display as liters by dividing by 1000.
+              delivery_ml:
+                type: integer
+                format: int64
+                minimum: 0
+                maximum: 9007199254740991
+                description: Integer milliliters. Display as liters by dividing by 1000.
+            required:
+              - name
+              - dispensed_ml
+              - delivery_ml
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/Audit"
+        comparison:
+          anyOf:
+            - type: object
+              properties:
+                from:
+                  type: integer
+                  format: int64
+                  description: UTC Unix epoch milliseconds.
+                to:
+                  type: integer
+                  format: int64
+                  description: UTC Unix epoch milliseconds.
+                dispensed_ml:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  maximum: 9007199254740991
+                  description: Integer milliliters. Display as liters by dividing by 1000.
+              required:
+                - from
+                - to
+                - dispensed_ml
+            - type: "null"
+      required:
+        - generated_at
+        - from
+        - to
+        - inventory_ml
+        - dispensed_ml
+        - active_shifts
+        - completed_shifts
+        - pending_approvals
+        - open_discrepancies
+        - financial_difference_irr
+        - correction_irr
+        - incoming_deliveries
+        - open_alerts
+        - employee_count
+        - series
+        - inventory_history
+        - fuel_distribution
+        - shift_status
+        - issue_categories
+        - discrepancy_status
+        - stations
+        - recent
+        - comparison
+    RoleRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Role"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    RolePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    EmployeeRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Employee"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    EmployeePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EmployeeRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    StationRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Station"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    StationPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StationRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    ShiftRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Shift"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    ShiftPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShiftRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    ReconciliationRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Reconciliation"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    ReconciliationPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReconciliationRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    CorrectionRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Correction"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    CorrectionPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CorrectionRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    DeliveryRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Delivery"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    DeliveryPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeliveryRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    BalanceRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Balance"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    BalancePage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BalanceRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    MovementRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Movement"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    MovementPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MovementRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    AlertRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+        station_id:
+          type: string
+        version:
+          type: integer
+          format: int64
+          minimum: 1
+        created_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        updated_at:
+          type: integer
+          format: int64
+          description: UTC Unix epoch milliseconds.
+        data:
+          $ref: "#/components/schemas/Alert"
+      required:
+        - id
+        - org_id
+        - station_id
+        - version
+        - created_at
+        - updated_at
+        - data
+    AlertPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertRecord"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
+    AuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Audit"
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+      required:
+        - items
+        - total
